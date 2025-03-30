@@ -10,7 +10,7 @@
 #include "string.h"
 #include "stdio.h"
 #include "stm32f4xx_hal.h"
-
+#include <stdlib.h>
 
 static SPI_HandleTypeDef *hspi;
 static GPIO_TypeDef* CS_port;
@@ -24,6 +24,7 @@ static uint16_t RESET_pin;
 //static SPI_HandleTypeDef *hspi_touch;
 //static GPIO_TypeDef* touch_cs_port;
 //static uint16_t touch_cs_pin;
+
 
 
 
@@ -296,12 +297,70 @@ void ILI9341_DrawString(uint16_t x, uint16_t y, const char* str, uint16_t fg_col
 
 
 
+void ILI9341_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color) {
+	int16_t dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+	int16_t dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;	
+	int16_t err = dx +dy, e2;
+	while(1) {
+		ILI9341_DrawPixel(x0, y0, color);
+		if(x0 == x1 && y0 == y1) break;
+		e2 = 2 * err;
+		if(e2 >= dy) { err += dy; x0 +=sx; }
+		if(e2 <= dx) { err += dx; y0 +=sy; }
+	}
+}
+
+void ILI9341_FillCircle(uint16_t x0, uint16_t y0, uint16_t r, uint16_t color) {
+	int16_t f = 1 - r;
+	int16_t ddF_x = 1;
+	int16_t ddF_y = -2 * r;
+	int16_t x = 0;
+	int16_t y = r;
+	
+	while(x <y) {
+		if( f >= 0) {
+			y--;
+			ddF_y +=2;
+			f += ddF_y;
+		}
+		x++;
+		ddF_x +=2;
+		f +=ddF_x;
+		ILI9341_DrawLine(x0 - x, y0 + y, x0 + x, y0 + y, color);
+		ILI9341_DrawLine(x0 - x, y0 - y, x0 + x, y0 - y, color);
+		ILI9341_DrawLine(x0 - y, y0 + x, x0 + y, y0 + x, color);
+		ILI9341_DrawLine(x0 - y, y0 - x, x0 + y, y0 - x, color);
+	}
+}
 
 
+void ILI9341_DrawRectangle(uint16_t x, uint16_t y,  uint16_t w,  uint16_t h,  uint16_t color)
+{
+	
+	if(x >= ILI9341_WIDTH || y>= ILI9341_HEIGHT)
+		return;
+	
+	if ((x + w -1) >= ILI9341_WIDTH)
+		w = ILI9341_WIDTH - x;
 
-
-
-
+	if ((y + h -1) >= ILI9341_HEIGHT)
+		h = ILI9341_HEIGHT - y;	
+	
+	ILI9341_SetAddressWindow(x, y, x + w -1, y + h -1);
+	
+	uint32_t pixels = w *h;
+	HAL_GPIO_WritePin(DC_port, DC_pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(CS_port, CS_pin, GPIO_PIN_RESET);
+	
+	uint8_t color_data[2] = { color >>8 , color & 0xff};
+	while(pixels--)
+	{
+		HAL_SPI_Transmit(hspi, color_data, 2, HAL_MAX_DELAY);
+		
+	}
+		HAL_GPIO_WritePin(CS_port, CS_pin, GPIO_PIN_SET);
+	
+}	
 
 
 
