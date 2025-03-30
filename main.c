@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "ili9341.h"
 #include "buttons.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +45,20 @@
 		uint8_t is_pressed;
 	}ImageButton_t;
 	
+	
+		typedef enum {
+		ANIM_PLAY,
+		ANIM_PAUSE,
+		ANIM_LOADING
+	} AnimationState;
+	
+	typedef enum { 
+		PLAYER_STOPPED,
+		PLAYER_PLAYING,
+		PLAYER_PAUSED
+	} PlayerState;
+	
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -69,11 +84,14 @@ SPI_HandleTypeDef hspi1;
 	extern const uint16_t next_btn_pressed[3200];
   extern const uint16_t back_btn_normal[3200];
   extern const uint16_t back_btn_pressed[3200];
-	
+	static uint8_t anim_frame = 0;
 	Page_t currentPage = PAGE_MAIN;
 	uint8_t redScreen = 0; //tracks if option botton has been pressed
+	
+	PlayerState playerState = PLAYER_STOPPED;
+	uint8_t animationFrame = 0;
+	
 
-	//botton images
 	
 
 	
@@ -92,8 +110,146 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 	
+	void DrawPlayIcon(uint16_t x, uint16_t y, uint16_t size, uint16_t color)
+	{
+		//draw play triangle
+		
+		for(uint8_t i = 0; i < size/2 ; i++)
+		{
+			ILI9341_DrawLine(x, y + i, x, y +size - i , color);
+			ILI9341_DrawLine(x, y + i, x + size , y +size /2 , color);
+			ILI9341_DrawLine(x, y + size - i, x + size, y +size /2 , color);
+		}
+	}
+	
+	void DrawPauseIcon(uint16_t x, uint16_t y, uint16_t size, uint16_t color)
+	{
+		//draw pause barwith animation effect
+		uint8_t barWidth = size/2;
+		uint8_t barHeight = size;
+		uint8_t spacing = size/8;
+		
+		//left bar(growing animation)
+		uint8_t currentHeight = (animationFrame < barHeight) ? animationFrame : barHeight;
+		ILI9341_FillRectangle(x, y + (barHeight - currentHeight)/2, barWidth, currentHeight, color);
+		
+		//right bar(growing animation)
+		currentHeight = (animationFrame < barHeight) ? animationFrame : barHeight;
+		ILI9341_FillRectangle(x + barWidth + spacing, y + (barHeight - currentHeight)/2, barWidth, currentHeight, color);
+		
+		
+	}
 	
 	
+
+	
+	void DrawPlayerControls()
+	{
+		uint16_t x = 150, y = 200, size = 30;
+		
+		//clear previous control area
+		
+		ILI9341_FillRectangle(x, y, size+50,  size+50, COLOR_BLACK);
+		
+		switch(playerState)
+		{
+			case PLAYER_PLAYING:
+				DrawPauseIcon(x, y, size, COLOR_RED);
+				break;
+			case PLAYER_PAUSED:
+			case PLAYER_STOPPED:
+					DrawPlayIcon(x, y, size, COLOR_GREEN);
+					break;
+		}
+		
+		//add animation effects
+//		if(animationFrame < 255)
+//		{
+//			uint8_t pulseSize = animationFrame/10;
+//			ILI9341_DrawRectangle(x-pulseSize, y-pulseSize, (size+2)*pulseSize, (size+2)*pulseSize, COLOR_WHITE);
+//		}
+		
+		
+	}
+	
+	
+	
+	
+	
+		void DrawPlayPauseAnimation(uint16_t x, uint16_t y, uint16_t size, AnimationState state, uint16_t fg_color, uint16_t bg_color, uint8_t frame)
+	{
+		ILI9341_FillRectangle(x, y, size, size, bg_color);
+		switch(state) {
+			case ANIM_PLAY:
+				//DRAW PLAY TRIANGLE
+			for(uint8_t i=0; i < (size/2) ;i++) {
+				ILI9341_DrawLine(x + (size/4), y + i, x + (size/4), y + size - i, fg_color);
+				ILI9341_DrawLine(x + (size/4), y + i, x + (3*(size/4)), y + (size/2), fg_color);
+				ILI9341_DrawLine(x + (size/4), y + size - i, x + (3*(size/4)), y + (size/2), fg_color);
+	}
+			break;
+	
+			case ANIM_PAUSE:
+			ILI9341_FillRectangle(x + (size/4),y + (size/4), size/6, size/2, fg_color);
+			ILI9341_FillRectangle(x + (3*(size/4)) - (size/6),y + (size/4), size/6, size/2, fg_color);
+			break;
+		
+			case ANIM_LOADING: {
+				uint16_t center_x = x + size/2;
+				uint16_t center_y = y + size/2;
+				uint16_t radius = size/3;
+			
+					for(uint8_t i=0;i < 8; i++) {
+						float angle = (2 * 3.14159 * ((i+frame) % 8)) / 8;
+						uint16_t px = center_x + (radius * cos(angle));
+						uint16_t py = center_y + (radius * sin(angle));
+						ILI9341_FillCircle(px, py, size/8, fg_color);
+					}
+				
+					break;
+				}
+				}
+		
+				
+			}	
+	
+	  void HandlePlayerButton() {
+		static uint32_t lastPressTime = 0;
+		static uint8_t wasPressed = 0;
+		
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET)
+		{
+		if(!wasPressed && (HAL_GetTick() - lastPressTime > 200))
+		{
+			wasPressed = 1;
+			lastPressTime = HAL_GetTick();
+			
+			//STATE TRANSITION WITH EFFECT
+			animationFrame = 0; // reset animation
+			
+			switch(playerState)
+			{
+				case PLAYER_STOPPED:
+				case PLAYER_PAUSED:
+					playerState = PLAYER_PLAYING;
+					break;
+				case PLAYER_PLAYING:
+					playerState = PLAYER_PAUSED;
+					break;
+			}
+		}
+	}else 
+		{
+			wasPressed = 0;
+		}
+		
+		if(animationFrame <255)
+		{
+			animationFrame +=5;
+		}
+		
+	}		
+				
 		ImageButton_t next_button = {
 		
 		.x = 240, .y = 190, .width = 80, .height = 40,
@@ -203,7 +359,7 @@ int main(void)
 	
 	  ILI9341_Init(&hspi1, GPIOA, GPIO_PIN_2, GPIOA, GPIO_PIN_1, GPIOA, GPIO_PIN_0);
 		ILI9341_FillScreen(COLOR_BLACK);
-	
+
 	
   /* USER CODE END 2 */
 
@@ -215,6 +371,20 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		
+		
+		
+	HandlePlayerButton();
+	DrawPlayerControls();
+	HAL_Delay(20);
+		
+		
+//		if(currentPage == PAGE_MAIN) {
+//			DrawPlayPauseAnimation(100,50,60, ANIM_PLAY, COLOR_WHITE, COLOR_BLACK, anim_frame);
+//			anim_frame++;
+//			HAL_Delay(10);
+//		}
+//		
+//		
 		//next botton - go to second page
 		if(IsBottonPressed(NEXT_BTN_PIN))
 		{
@@ -238,15 +408,16 @@ int main(void)
 		}
 		
 		//option botton - toggle screen color
-	  if(IsBottonPressed(OPTION_BTN_PIN))
-		{
-			redScreen = !redScreen; //toggle state
-			DrawPage();
-		}
+//	  if(IsBottonPressed(OPTION_BTN_PIN))
+//		{
+//			redScreen = !redScreen; //toggle state
+//			DrawPage();
+//		}
 		HAL_Delay(10);
   }
   /* USER CODE END 3 */
-}
+    }
+	
 
 /**
   * @brief System Clock Configuration
@@ -370,6 +541,9 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+	
+	
+	
 /* USER CODE END 4 */
 
 /**
