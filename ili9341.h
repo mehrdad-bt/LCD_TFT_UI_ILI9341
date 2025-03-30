@@ -80,6 +80,11 @@
 
 
 
+#define ILI9341_WIDTH      240
+#define ILI9341_HEIGHT     320
+
+
+
 // Function Prototypes
 void ILI9341_Init(SPI_HandleTypeDef *hspi, GPIO_TypeDef* CS_port, uint16_t CS_pin, GPIO_TypeDef* DC_port, uint16_t DC_pin, GPIO_TypeDef* RESET_port, uint16_t RESET_pin);
 void ILI9341_WriteCommand(uint8_t cmd);
@@ -96,6 +101,10 @@ void ILI9341_TouchTest(void);
 uint16_t Touch_Read(uint8_t command);
 void Touch_Init(SPI_HandleTypeDef *hspi_instance, GPIO_TypeDef* touch_cs_port_instance,uint16_t touch_cs_pin_instance);
 void ILI9341_DrawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *img);
+void ILI9341_DrawLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color);
+void ILI9341_FillCircle(uint16_t x0, uint16_t y0, uint16_t r, uint16_t color);
+void ILI9341_DrawRectangle(uint16_t x, uint16_t y,  uint16_t w,  uint16_t h,  uint16_t color);
+
 #endif
 
 
